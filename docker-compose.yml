@@ -1,0 +1,25 @@
+services:
+  archivebox:
+    image: archivebox/archivebox:latest
+    ports:
+      - 8000:8000
+    volumes:
+      - ./data:/data
+    environment:
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin
+      - ALLOWED_HOSTS=* 
+      - PUBLIC_INDEX=True 
+      - PUBLIC_SNAPSHOTS=True 
+      - PUBLIC_ADD_VIEW=True 
+      - TIMEOUT=3600
+      - MEDIA_TIMEOUT=3600
+
+  proxy:
+    image: mitmproxy-archivebox
+    ports:
+      - 8080:8080
+    environment:
+      - ARCHIVEBOX_ENDPOINT=http://archivebox:8000
+    depends_on: 
+      - archivebox
