@@ -20,53 +20,36 @@ log = logging.getLogger(__name__)
 
 ARCHIVEBOX_ENDPOINT = os.environ.get("ARCHIVEBOX_ENDPOINT", "").rstrip("/")
 ARCHIVEBOX_TOKEN = os.environ.get("ARCHIVEBOX_TOKEN")
+ARCHIVEBOX_METHODS = os.environ.get(
+    "ARCHIVEBOX_METHODS",
+    "favicon,headers,pdf,screenshot,wget,title,htmltotext,archive_org",
+).split(",")
+ARCHIVE_REQUEST_METHODS = os.environ.get("ARCHIVE_REQUEST_METHODS", "GET").split(",")
 
 
-def ping():
-    if not ARCHIVEBOX_ENDPOINT:
-        log.error(
-            "Archivebox config incomplete or missing, set "
-            "`ARCHIVEBOX_ENDPOINT` via env var!"
-        )
-        return
-
-    # test connection on startup
-    for retry in range(1, 5):
-        # if not ARCHIVEBOX_ENDPOINT or not ARCHIVEBOX_TOKEN:
-        # log.error(
-        #     "Archivebox config incomplete or missing, set "
-        #     "`ARCHIVEBOX_ENDPOINT` and `ARCHIVEBOX_TOKEN` via env var!"
-        # )
-        try:
-            res = requests.head(ARCHIVEBOX_ENDPOINT)
-            if res.ok:
-                return
-            res.raise_for_status()
-        except Exception as e:
-            log.warn(
-                f"`{e}` while connecting to `{ARCHIVEBOX_ENDPOINT}: retrying ..."
-            )
-        # res = requests.post(
-        #     f"{ARCHIVEBOX_ENDPOINT}/api/v1/auth/check_api_token",
-        #     json={"token": ARCHIVEBOX_TOKEN},
-        # )
-        # if res.ok and res.json()["success"]:
-        #     pass
-        time.sleep(retry**2)
-
-    # give up
-    res = requests.head(ARCHIVEBOX_ENDPOINT)
-    if res.ok:
-        return
-    log.error(res.text)
+if not ARCHIVEBOX_ENDPOINT:
     log.error(
-        f"ArchiveBox {ARCHIVEBOX_ENDPOINT} not reachable or credentials "
-        "not authorized, check `ARCHIVEBOX_ENDPOINT` and "
-        "`ARCHIVEBOX_TOKEN` env vars!"
+        "Archivebox config incomplete or missing, set "
+        "`ARCHIVEBOX_ENDPOINT` via env var!"
     )
 
-
-ping()
+# test connection on startup
+# if not ARCHIVEBOX_ENDPOINT or not ARCHIVEBOX_TOKEN:
+# log.error(
+#     "Archivebox config incomplete or missing, set "
+#     "`ARCHIVEBOX_ENDPOINT` and `ARCHIVEBOX_TOKEN` via env var!"
+# )
+try:
+    res = requests.head(ARCHIVEBOX_ENDPOINT)
+    res.raise_for_status()
+except Exception as e:
+    log.error(f"`{e}` while connecting to `{ARCHIVEBOX_ENDPOINT}`.")
+# res = requests.post(
+#     f"{ARCHIVEBOX_ENDPOINT}/api/v1/auth/check_api_token",
+#     json={"token": ARCHIVEBOX_TOKEN},
+# )
+# if res.ok and res.json()["success"]:
+#     pass
 
 
 def _archive(url: str) -> requests.Response:
@@ -86,23 +69,15 @@ def _archive(url: str) -> requests.Response:
             "parser": "auto",
             "depth": "0",
             "tags": "",
-            "archive_methods": [
-                "favicon",
-                "headers",
-                "pdf",
-                "screenshot",
-                "wget",
-                "title",
-                "htmltotext",
-            ],
+            "archive_methods": ARCHIVEBOX_METHODS,
         },
     )
 
 
 @anycache
 def archive(url: str):
-    res = _archive(url)
     for retry in range(3):
+        res = _archive(url)
         if res.ok:
             log.info(f"Archived `{url}")
             return datetime.now(UTC).isoformat()
@@ -113,8 +88,7 @@ def archive(url: str):
 
 
 async def request(flow: HTTPFlow):
-    if ARCHIVEBOX_ENDPOINT is None or ARCHIVEBOX_TOKEN is None:
-        return
-    url = flow.request.url
-    loop = asyncio.get_running_loop()
-    loop.run_in_executor(None, archive, url)
+    if flow.request.method in ARCHIVE_REQUEST_METHODS:
+        url = flow.request.url
+        loop = asyncio.get_running_loop()
+        loop.run_in_executor(None, archive, url)
